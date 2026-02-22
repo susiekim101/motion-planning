@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Test RRT algorithm with varying step_size and goal_sample_rate parameters.
-Measures success rate, path length, and planning time across different configurations.
-"""
-
 import numpy as np
 import time
 import matplotlib.pyplot as plt

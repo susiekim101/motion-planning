@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Test PRM algorithm with varying n_samples parameter.
-Measures success rate, path length, and planning time across different sample sizes.
-"""
-
 import numpy as np
 import time
 import matplotlib.pyplot as plt

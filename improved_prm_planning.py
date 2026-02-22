@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from environment import Environment
-from motion_planning import PRM, RRT
+from motion_planning import PRM
 
 
 class PRMVisualizer:

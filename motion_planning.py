@@ -217,7 +217,7 @@ class PRM:
 class RRT:
     """Rapidly-exploring Random Tree planner."""
     
-    def __init__(self, environment, max_iter=5000, step_size=0.5, goal_sample_rate=0.1):
+    def __init__(self, environment, max_iter=5000, step_size=0.5, goal_sample_rate=0.1, adaptive_goal_bias=False, final_goal_sample_rate=0.5):
         """
         Args:
             environment: Environment instance
@@ -228,8 +228,10 @@ class RRT:
         self.env = environment
         self.max_iter = max_iter
         self.step_size = step_size
+        self.initial_goal_sample_rate = goal_sample_rate
         self.goal_sample_rate = goal_sample_rate
-        
+        self.adaptive_goal_bias = adaptive_goal_bias
+        self.final_goal_sample_rate = final_goal_sample_rate        
         # For visualization
         self.nodes = []
         self.parents = {}
@@ -307,3 +309,105 @@ class RRT:
         self.tree_built = True
         return None
 
+    def plan_improved_rrt(self, start, goal, goal_tolerance=0.5, visualize_callback=None):
+        """
+        Plan a path from start to goal.
+        
+        Args:
+            start: [x, y] start position
+            goal: [x, y] goal position
+            goal_tolerance: distance to goal considered success
+            visualize_callback: function(nodes, parents, iteration) for visualization
+            
+        Returns:
+            path: list of [x, y] waypoints, or None if no path found
+        """
+        print(f"Planning with RRT (max {self.max_iter} iterations)...")
+        if self.adaptive_goal_bias:
+            print(f"Adaptive goal bias: {self.initial_goal_sample_rate:.2f} → {self.final_goal_sample_rate:.2f}")
+        
+        # Tree structure
+        self.nodes = [start]
+        self.parents = {0: None}
+        obstacle_sample_prob = 0.7
+        obstacle_buffer = 0.1
+        
+        for i in range(self.max_iter):
+            # Update goal sample rate adaptively
+            if self.adaptive_goal_bias:
+                # Linear increase from initial to final rate
+                progress = i / self.max_iter
+                self.goal_sample_rate = (self.initial_goal_sample_rate + 
+                                        progress * (self.final_goal_sample_rate - 
+                                                   self.initial_goal_sample_rate))
+            
+            # Sample random point
+            if np.random.random() < self.goal_sample_rate:
+                # Sample goal
+                rand_point = goal
+            elif np.random.random() < obstacle_sample_prob and len(self.env.landmarks) > 0:
+                # Sample near an obstacle (70% of non-goal samples)
+                obstacle_id = np.random.choice(list(self.env.landmarks.keys()))
+                obstacle_pos = self.env.landmarks[obstacle_id]
+                
+                sample_radius = self.env.obstacle_radius + obstacle_buffer
+                
+                angle = np.random.uniform(0, 2 * np.pi)
+                distance = np.random.uniform(0, sample_radius)
+                
+                x = obstacle_pos[0] + distance * np.cos(angle)
+                y = obstacle_pos[1] + distance * np.sin(angle)
+                rand_point = np.array([x, y])
+            else:
+                # Uniform random sampling
+                x = np.random.uniform(self.env.x_min, self.env.x_max)
+                y = np.random.uniform(self.env.y_min, self.env.y_max)
+                rand_point = np.array([x, y])
+            
+            # Find nearest node in tree
+            distances = [np.linalg.norm(node - rand_point) for node in self.nodes]
+            nearest_idx = np.argmin(distances)
+            nearest_node = self.nodes[nearest_idx]
+            
+            # Steer towards random point
+            direction = rand_point - nearest_node
+            distance = np.linalg.norm(direction)
+            
+            if distance > self.step_size:
+                direction = direction / distance * self.step_size
+            
+            new_node = nearest_node + direction
+            
+            # Check if new node is collision-free
+            if self.env.is_collision_free(new_node) and \
+               self.env.is_path_collision_free(nearest_node, new_node):
+                new_idx = len(self.nodes)
+                self.nodes.append(new_node)
+                self.parents[new_idx] = nearest_idx
+                
+                # Visualization callback
+                if visualize_callback and i % 10 == 0:
+                    visualize_callback(self.nodes, self.parents, i, rand_point, nearest_idx, new_node)
+                
+                # Check if goal reached
+                if np.linalg.norm(new_node - goal) < goal_tolerance:
+                    print(f"Goal reached in {i+1} iterations!")
+                    if self.adaptive_goal_bias:
+                        print(f"Final goal_sample_rate: {self.goal_sample_rate:.3f}")
+                    
+                    # Reconstruct path
+                    path = [goal, new_node]
+                    current_idx = new_idx
+                    while self.parents[current_idx] is not None:
+                        current_idx = self.parents[current_idx]
+                        path.append(self.nodes[current_idx])
+                    path.reverse()
+                    
+                    self.tree_built = True
+                    return np.array(path)
+        
+        print("RRT failed to find path")
+        if self.adaptive_goal_bias:
+            print(f"Final goal_sample_rate reached: {self.goal_sample_rate:.3f}")
+        self.tree_built = True
+        return None

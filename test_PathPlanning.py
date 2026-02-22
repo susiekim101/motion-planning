@@ -295,6 +295,10 @@ def demo_rrt(env, start, goal):
                              label='Goal', zorder=7)
             visualizer.ax.legend(loc='upper right', fontsize=9, framealpha=0.9)
             
+            filename = 'regular_rrt_planning.png'
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"✓ Plot saved as: {filename}")
+
             print("\nFinal path displayed. Press Ctrl+C or close window to continue...")
             plt.pause(3)
         else:
